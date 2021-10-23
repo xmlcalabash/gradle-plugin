@@ -1,0 +1,61 @@
+plugins {
+  id 'groovy'
+  id 'java-gradle-plugin'
+  id 'com.gradle.plugin-publish' version '0.14.0'
+}
+
+sourceCompatibility = 1.8
+
+dependencies {
+  implementation gradleApi()
+  implementation 'com.xmlcalabash:xml-calabash_2.13:2.99.6'
+  //implementation fileTree(dir: "lib/"),
+
+  testImplementation('org.spockframework:spock-core:2.0-M5-groovy-3.0') {
+    exclude group: 'org.codehaus.groovy'
+  }
+
+  testImplementation gradleTestKit()
+  testImplementation 'junit:junit:4.12'
+}
+
+repositories {
+  mavenCentral()
+  maven { url "https://maven.restlet.com" }
+  maven { url "https://dev.saxonica.com/maven" }
+}
+
+test {
+  testLogging {
+    showStandardStreams = true
+    exceptionFormat = 'full'
+  }
+}
+
+wrapper {
+  gradleVersion = '7.0'
+}
+
+pluginBundle {
+  website = 'https://xmlcalabash.com/'
+  vcsUrl = 'https://github.com/xmlcalabash/gradle.git'
+  description = 'A Gradle plugin for running XML Calabash 3.x'
+  tags = ['xproc', 'documentation']
+
+  mavenCoordinates {
+    groupId = project.group.toString()
+    artifactId = project.name
+    version = project.version.toString()
+  }
+}
+
+gradlePlugin {
+  plugins {
+    XmlCalabashPlugin {
+      id = 'com.xmlcalabash.gradle.xmlcalabash'
+      displayName = 'XML Calabash Gradle Plugin'
+      implementationClass = 'com.xmlcalabash.gradle.XmlCalabashPlugin'
+      description = 'A Gradle plugin for running XProc pipelines with XML Calabash'
+    }
+  }
+}
