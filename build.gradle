@@ -8,7 +8,7 @@ sourceCompatibility = 1.8
 
 dependencies {
   implementation gradleApi()
-  implementation 'com.xmlcalabash:xml-calabash_2.13:2.99.6'
+  implementation 'com.xmlcalabash:xml-calabash_2.13:2.99.7'
   //implementation fileTree(dir: "lib/"),
 
   testImplementation('org.spockframework:spock-core:2.0-M5-groovy-3.0') {
@@ -38,7 +38,7 @@ wrapper {
 
 pluginBundle {
   website = 'https://xmlcalabash.com/'
-  vcsUrl = 'https://github.com/xmlcalabash/gradle.git'
+  vcsUrl = 'https://github.com/xmlcalabash/gradle-plugin.git'
   description = 'A Gradle plugin for running XML Calabash 3.x'
   tags = ['xproc', 'documentation']
 
