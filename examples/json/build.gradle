@@ -1,0 +1,122 @@
+plugins {
+  // This is a dummy version number because the extension is
+  // referenced directly in settings.gradle. Use the real
+  // version number in your build scripts
+  id 'com.xmlcalabash.gradle.xmlcalabash' version '1.0-SNAPSHOT'
+}
+
+import com.xmlcalabash.gradle.XmlCalabashTask
+
+task jsonidentity(type: XmlCalabashTask) {
+  outputs.upToDateWhen { false }
+
+  // You can pass JSON documents to the pipeline.
+  input "source", "doc.json"
+  output "result", "output.json"
+  pipeline 'pipe.xpl'
+}
+
+task mapidentity(type: XmlCalabashTask) {
+  outputs.upToDateWhen { false }
+
+  // If you pass a Gradle map or array as an input, the
+  // plugin will turn it into JSON for you.
+  input "source", ["test": "value"]
+  output "result", "mapoutput.json"
+  pipeline 'pipe.xpl'
+}
+
+task stringidentity(type: XmlCalabashTask) {
+  outputs.upToDateWhen { false }
+
+  // You can also pass JSON directly as a string by supplying the
+  // content type.
+  input "source", '{"string": true}', "json"
+  output "result", "stringoutput.json"
+  pipeline 'pipe.xpl'
+}
+
+// Now let's do something a little more interesting.
+// countdown.xpl takes a schedule of events as a JSON map
+// and an event and outputs the number of days until that
+// event. The default event is Christmas.
+task christmas(type: XmlCalabashTask) {
+  outputs.upToDateWhen { false }
+  pipeline 'countdown.xpl'
+}
+
+// You can specify your own events, try -Pevent=earth-day
+task countdown(type: XmlCalabashTask) {
+  outputs.upToDateWhen { false }
+  pipeline 'countdown.xpl'
+  if (project.hasProperty('event')) {
+    option 'event', event
+  }
+}
+
+// You can also specify your own input map.
+task burns_night(type: XmlCalabashTask) {
+  outputs.upToDateWhen { false }
+
+  pipeline 'countdown.xpl'
+  input "source", [
+    "burns-night": [ "title": "Burns Night", "date": "01-25" ]
+  ]
+  option("event", "burns-night")
+}
+
+// Test that it works if the event is today
+task today(type: XmlCalabashTask) {
+  outputs.upToDateWhen { false }
+
+  def date = new Date()
+  def gmonthday = sprintf("%02d-%02d", [date.getMonth()+1, date.getDate()])
+
+  pipeline 'countdown.xpl'
+  input "source", [
+    "today": [ "title": "today", "date": gmonthday ]
+  ]
+  option("event", "today")
+}
+
+// Test that it works if the event is tomorrow
+task tomorrow(type: XmlCalabashTask) {
+  outputs.upToDateWhen { false }
+
+  def date = new Date()
+  def calendar = Calendar.getInstance()
+  calendar.setTime(date)
+  calendar.add(Calendar.DAY_OF_MONTH, 1)
+  date = calendar.getTime()
+  def gmonthday = sprintf("%02d-%02d", [date.getMonth()+1, date.getDate()])
+
+  pipeline 'countdown.xpl'
+  input "source", [
+    "tomorrow": [ "title": "tomorrow", "date": gmonthday ]
+  ]
+  option("event", "tomorrow")
+}
+
+// Is it the weekend yet?
+task weekend(type: XmlCalabashTask) {
+  outputs.upToDateWhen { false }
+
+  // Let's calculate when Saturday is so that XProc can calculate
+  // how long it is until Saturday. Because this is already a
+  // slightly crazy example.
+  def calendar = Calendar.getInstance()
+  def day = calendar.get(Calendar.DAY_OF_WEEK)
+  // You can do this with modular arithmetic, but I'm lazy
+  while (day != Calendar.SATURDAY) {
+    calendar.add(Calendar.DAY_OF_MONTH, 1)
+    day = calendar.get(Calendar.DAY_OF_WEEK)
+  }
+  def date = calendar.getTime()
+  def gmonthday = sprintf("%02d-%02d", [date.getMonth()+1, date.getDate()])
+
+  pipeline 'countdown.xpl'
+  input "source", [
+    "weekend": [ "title": "the weekend", "date": gmonthday ]
+  ]
+  option("event", "weekend")
+}

@@ -1,0 +1,39 @@
+plugins {
+  // This is a dummy version number because the extension is
+  // referenced directly in settings.gradle. Use the real
+  // version number in your build scripts
+  id 'com.xmlcalabash.gradle.xmlcalabash' version '1.0-SNAPSHOT'
+}
+
+import com.xmlcalabash.gradle.XmlCalabashTask
+import net.sf.saxon.s9api.Processor
+import net.sf.saxon.s9api.XdmNode
+
+// Create a wrapper for Saxon containing a static
+// Processor. XML Calabash and all the documents you
+// process with it must use the same Processor.
+class SaxonWrapper {
+  private static final saxon = new Processor(false)
+
+  Processor getProcessor() { return saxon }
+
+  XdmNode loadxml(String filename) {
+    def builder = saxon.newDocumentBuilder()
+    builder.setDTDValidation(false)
+    builder.setLineNumbering(true)
+    return builder.build(new File(filename))
+  }
+}
+
+task saxonidentity(type: XmlCalabashTask) {
+  def saxon = new SaxonWrapper()
+  def xml = saxon.loadxml("doc.xml")
+
+  debugTask true
+  processor saxon.processor
+  pipeline 'pipe.xpl'
+  input "source", xml
+  output "result", "output.xml"
+
+  outputs.upToDateWhen { false }
+}

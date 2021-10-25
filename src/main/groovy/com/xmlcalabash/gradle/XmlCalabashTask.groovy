@@ -16,155 +16,124 @@ import org.gradle.api.InvalidUserDataException
 import javax.inject.Inject
 import java.nio.file.Path
 
+import net.sf.saxon.s9api.Processor
+import net.sf.saxon.s9api.XdmValue
+
 import com.xmlcalabash.XMLCalabash
 
-class XmlCalabashTask extends DefaultTask implements XmlCalabashPluginOptions {
-  protected final Map<String, Object> options = [:]
-  protected final Map<String, Object> pluginOptions = [:]
-  protected final ArrayList<XProcInput> inputports = []
-  protected final Map<String, File> outputports = [:]
-  protected final Map<String, String> pipelineOptions = [:]
+import com.fasterxml.jackson.core.JsonGenerationException
+import com.fasterxml.jackson.databind.JsonMappingException
+import com.fasterxml.jackson.databind.ObjectMapper
 
-  protected File pipeline = null
-
-  // ============================================================
-
-  void setOption(String name, Object value) {
-    if (name == 'graph') {
-      if (value instanceof ArrayList) {
-        options[name] = value
-      } else {
-        if (!(name in options)) {
-          options[name] = new ArrayList()
-        }
-        options[name] += value
-      }
-    } else {
-      options[name] = value
-    }
-  }
-
-  void setPluginOption(String name, Object value) {
-    pluginOptions[name] = value
-  }
-
-  Object getOption(String name) {
-    return options[name]
-  }
-
-  Object getPluginOption(String name) {
-    return pluginOptions[name]
-  }
+class XmlCalabashTask extends DefaultTask {
+  protected final Map<String, ArrayList<XProcValue>> xp_options = [:]
+  protected final Map<String, ArrayList<XProcValue>> xp_inputs = [:]
+  protected final Map<String, ArrayList<String>> xp_configs = [:]
+  protected final Map<String, File> xp_outputs = [:]
+  protected Processor saxon = null
+  protected XProcValue pipeline = null
+  protected boolean debugTask = false
+  protected boolean running = false
 
   // ============================================================
 
-  void input(Object input) {
-    def iport = null
-    def iuri = null
-    def ifile = null
-    def ctype = null
-
-    if (input instanceof HashMap) {
-      input.keySet().each { key ->
-        if (key == "port") {
-          iport = input.get(key)
-        } else if (key == "uri") {
-          iuri = input.get(key)
-        } else if (key == "file") {
-          ifile = input.get(key)
-        } else if (key == "content-type") {
-          ctype = input.get(key)
-        } else {
-          throw new GradleException("XML Calabash input map contains invalid key: " + key)
-        }
-      }
-    } else {
-      ifile = input
-      ctype = "application/xml"
-    }
-    if (iport == null) {
-      iport = "source"
-    }
-
-    if (iuri != null && ifile != null) {
-      throw new GradleException("XML Calabash input map may contain only one of 'file' and 'uri'")
-    }
-
-    if (iuri == null && ifile == null) {
-      throw new GradleException("XML Calabash input map must contain one of 'file' or 'uri'")
-    }
-
-    if (iuri == null) {
-      inputports.add(new XProcInput(iport, project.file(ifile), ctype))
-    } else {
-      inputports.add(new XProcInput(iport, new URI(iuri)))
-    }
+  void debugTask(boolean debug) {
+    debugTask = debug
   }
 
-  void input(String port, Object input) {
-    inputports.add(new XProcInput(port, input, "xml"))
+  void processor(Processor processor) {
+    saxon = processor
+  }
+
+  void input(String port, Object data) {
+    this.input(port, data, null)
+  }
+
+  void input(String port, Object data, String contentType) {
+    def value = new XProcValue(data, contentType)
+    if (!(port in xp_inputs)) {
+      xp_inputs.put(port, new ArrayList<XProcValue>())
+    }
+    xp_inputs[port] += value
   }
 
   void output(String port, Object output) {
-    if (!(port in outputports)) {
-      outputports[port] = new ArrayList()
+    if (!(port in xp_outputs)) {
+      xp_outputs[port] = new ArrayList<XProcValue>()
     }
-
-    outputports[port] += project.file(output)
+    xp_outputs[port] += project.file(output)
   }
 
   void pipeline(Object xpl) {
-    // If it's a string that looks like a URI, try to make it a URI
-    if (xpl instanceof String && xpl ==~ /^\S+:\/\/.*/) {
-      try {
-        xpl = new URI(xpl)
-      } catch (URISyntaxException ex) {
-        // nevermind
-      }
-    }
+    this.pipeline(xpl, null)
+  }
 
-    if (xpl instanceof URI) {
-      // If it's a file: URI, turn it into a file
-      if (xpl.getScheme() == "file") {
-        def xplfile = project.file(xpl.getPath())
-        pipeline = xplfile
-      } else {
-        // Otherwise just try to load it (for the output method)
-        pipeline = xpl
-      }
-    } else {
-      // If it's not a URI, assume it's a file, load it if it exists
-      def xplfile = project.file(xpl)
-      pipeline = xplfile
-    }
+  void pipeline(Object xpl, String contentType) {
+    pipeline = new XProcValue(xpl, contentType)
   }
 
   void option(String eqname, Object value) {
-    if (eqname in pipelineOptions) {
-      throw new GradleException("Option names cannot be repeated: ${eqname}")
-    }
-    pipelineOptions[eqname] = value
+    this.option(eqname, value, null)
   }
+  
+  void option(String eqname, Object data, String contentType) {
+    def value = null
+
+    if (data instanceof String) {
+      if (contentType == null) {
+        value = new XProcValue(data, "x-raw/string")
+      } else {
+        value = new XProcValue(data, contentType)
+      }
+    } else {
+      value = new XProcValue(data, contentType)
+    }
+
+    if (!(eqname in xp_options)) {
+      xp_options.put(eqname, new ArrayList<XProcValue>())
+    }
+
+    xp_options[eqname] += value
+  }    
+
+  void config(String eqname, String value) {
+    if (!(eqname in xp_configs)) {
+      xp_configs.put(eqname, new ArrayList<String>())
+    }
+    xp_configs[eqname] += value
+  }    
+
+  void config(String eqname, Boolean value) {
+    if (!(eqname in xp_configs)) {
+      xp_configs.put(eqname, new ArrayList<String>())
+    }
+    xp_configs[eqname] += value.toString()
+  }    
+
+  // ============================================================
 
   @OutputFiles
   FileCollection getOutputFiles() {
     FileCollection files = project.files()
-    outputports.keySet().each { key ->
-      outputports[key].each { f ->
-        files += project.files(f)
+    xp_outputs.keySet().each { port ->
+      xp_outputs[port].each { value ->
+        files.from(value)
       }
     }
     return files
   }
 
   @InputFiles
-  @SkipWhenEmpty
   FileCollection getInputFiles() {
     FileCollection files = project.files()
-    files += project.files(pipeline)
-    inputports.each { xi ->
-      if (xi.getFile() != null) {
-        files += project.files(xi.getFile())
+    if (pipeline.fileValue != null) {
+      files.from(pipeline.fileValue)
+    }
+    xp_inputs.keySet().each { port ->
+      xp_inputs[port].each { value ->
+        if (value.fileValue != null) {
+          files.from(value.fileValue)
+        }
       }
     }
     return files
@@ -172,34 +141,81 @@ class XmlCalabashTask extends DefaultTask implements XmlCalabashPluginOptions {
 
   @TaskAction
   void run() {
-    def xproc = XMLCalabash.newInstance()
-    xproc.args.pipeline(this.pipeline)
-
-    inputports.each { xi ->
-      if (xi.getFile() != null) {
-        xproc.args.input(xi.getPort(), xi.getFile(), xi.getContentType())
-      } else {
-        xproc.args.input(xi.getPort(), xi.getURI())
-      }
+    running = true
+    if (pipeline == null) {
+      throw new GradleException("No pipeline provided.")
     }
 
-    outputports.keySet().each { key ->
-      outputports[key].each { f ->
-        xproc.args.output(key, f.getAbsolutePath())
+    XMLCalabash xproc
+    if (saxon == null) {
+      if (debugTask) {
+        println("Creating XMLCalabash with new processor")
       }
+      xproc = XMLCalabash.newInstance()
+    } else {
+      if (debugTask) {
+        println("Creating XMLCalabash with supplied processor")
+      }
+      xproc = XMLCalabash.newInstance(saxon)
     }
 
-    options.keySet().each { name ->
-      if (options.get(name) instanceof ArrayList) {
-        options.get(name).each { value ->
-          xproc.args.option(name, value)
+    if (debugTask) {
+      println("Pipeline: ${pipeline}")
+    }
+
+    if (pipeline.contentType != null) {
+      xproc.args.pipeline(pipeline.value, pipelien.contentType)
+    } else {
+      xproc.args.pipeline(pipeline.value)
+    }
+
+    xp_inputs.keySet().each { port ->
+      xp_inputs[port].each { value ->
+        if (debugTask) {
+          println("Input ${port}: ${value}")
         }
-      } else {
-        xproc.args.option(name, options.get(name))
+
+        if (value.contentType != null) {
+          xproc.args.input(port, value.value, value.contentType)
+        } else {
+          xproc.args.input(port, value.value)
+        }
       }
     }
 
-    Boolean debug = getPluginOption('debug')
+    xp_outputs.keySet().each { port ->
+      xp_outputs[port].each { value ->
+        if (debugTask) {
+          println("Output ${port}: ${value}")
+        }
+
+        xproc.args.output(port, value.getAbsolutePath())
+      }
+    }
+
+    xp_options.keySet().each { eqname ->
+      xp_options[eqname].each { value ->
+        if (debugTask) {
+          println("Option ${eqname}: ${value}")
+        }
+
+        if (value.contentType != null) {
+          xproc.args.option(eqname, value.value, value.contentType)
+        } else {
+          xproc.args.option(eqname, value.value)
+        }
+      }
+    }
+
+    xp_configs.keySet().each { eqname ->
+      xp_configs[eqname].each { value ->
+        if (debugTask) {
+          println("Config ${eqname}: ${value}")
+        }
+
+        xproc.args.config(eqname, value)
+      }
+    }
 
     try {
       xproc.run()
@@ -207,40 +223,105 @@ class XmlCalabashTask extends DefaultTask implements XmlCalabashPluginOptions {
       println(xproc.errorMessage())
       throw e
     }
+    running = false
   }
 
-  private class XProcInput {
-    private String iport = null
-    private File ifile = null
-    private URI iuri = null
-    private String ctype = null
+  private class XProcValue {
+    Object value = null
+    String ctype = null
+    File fvalue = null
 
-    String getPort() { return iport }
-    File getFile() { return ifile }
-    URI getURI() { return iuri }
+    Object getValue() {
+      return value
+    }
+
+    Object getFileValue() {
+      return fvalue
+    }
+
     String getContentType() {
-      if (ctype == "text") {
-        return "text/plain"
-      } else if (ctype == "html") {
-        return "text/html"
-      } else if (ctype == "json") {
-        return "application/json"
-      } else if (ctype == "xml" || ctype == null) {
-        return "application/xml"
+      return ctype
+    }
+    
+    XProcValue(Object data) {
+      this(data, null)
+    }
+
+    XProcValue(Object data, String contentType) {
+      if (contentType != null) {
+        if (contentType == "xml") {
+          ctype = "application/xml"
+        } else if (contentType == "json") {
+          ctype = "application/json"
+        } else if (contentType == "text") {
+          ctype = "text/plain"
+        } else {
+          ctype = contentType
+        }
+      }
+
+      if (data instanceof File) {
+        fvalue = data
+        if (contentType == null) {
+          // Dunno what type of file it is, pass it in as a URI so
+          // that XML Calabash will attempt to sort out its content
+          // type.
+          value = data.toURI()
+        } else {
+          value = data
+        }
+      } else if (data instanceof URI) {
+        value = data
+      } else if (data instanceof HashMap || data instanceof ArrayList) {
+        def mapper = new ObjectMapper()
+        value = mapper.writeValueAsString(data)
+        if (contentType == null) {
+          ctype = "application/json"
+        }
+      } else if (data instanceof groovy.xml.slurpersupport.GPathResult) {
+        value = groovy.xml.XmlUtil.serialize(data)
+        if (contentType == null) {
+          ctype = "application/xml"
+        }
+      } else if (data instanceof groovy.util.slurpersupport.GPathResult) {
+        value = groovy.util.XmlUtil.serialize(data)
+        if (contentType == null) {
+          ctype = "application/xml"
+        }
+      } else if (data instanceof XdmValue) {
+        value = data
+        ctype = null
+      } else if (data instanceof String) {
+        if (contentType == null) {
+          fvalue = project.file(data)
+          value = fvalue.toURI()
+        } else {
+          value = data
+          if (contentType == "x-raw/string") {
+            ctype = null
+          }
+        }
       } else {
-        return ctype
+        data = value // Let the chips fall where they may
       }
     }
 
-    XProcInput(String port, File infile, String contentType) {
-      iport = port
-      ifile = infile
-      ctype = contentType
-    }
-
-    XProcInput(String port, URI uri) {
-      iport = port
-      iuri = uri
+    String toString() {
+      if (value instanceof File) {
+        return "File ${value.getAbsolutePath}"
+      } else if (value instanceof URI) {
+        return "URI ${value}"
+      } else if (value instanceof String) {
+        if (ctype == null) {
+          return "String '${value}'"
+        } else {
+          return "${ctype} '${value}'"
+        }
+      } else if (value instanceof XdmValue) {
+        return "XdmValue ${value}"
+      } else {
+        return "${value.getClass().getName()} ${value}"
+      }
     }
   }
 }

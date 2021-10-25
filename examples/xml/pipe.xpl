@@ -3,7 +3,9 @@
                 version="3.0">
 
 <p:input port="source"/>
-<p:output port="result"/>
+<p:output port="result"
+          serialization="map { 'omit-xml-declaration': true(),
+                               'indent': false() }"/>
 
 <p:identity/>
 
