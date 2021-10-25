@@ -8,8 +8,11 @@ sourceCompatibility = 1.8
 
 dependencies {
   implementation gradleApi()
-  implementation 'com.xmlcalabash:xml-calabash_2.13:2.99.7'
-  //implementation fileTree(dir: "lib/"),
+  implementation 'com.xmlcalabash:xml-calabash_2.13:2.99.8'
+  implementation 'com.fasterxml.jackson.core:jackson-databind:2.10.2'
+  implementation 'org.codehaus.groovy:groovy-xml:3.0.7'
+
+  implementation fileTree(dir: "lib/"),
 
   testImplementation('org.spockframework:spock-core:2.0-M5-groovy-3.0') {
     exclude group: 'org.codehaus.groovy'
