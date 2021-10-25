@@ -9,7 +9,7 @@ Add the plugin to your `plugins`:
 ```
 plugins {
   id 'com.xmlcalabash.gradle.xmlcalabash' version '0.0.2'
-  }
+}
 ```
 
 Import the task type:
@@ -113,7 +113,7 @@ namespace, use an EQName to identify it.
 
 The following standard options are defined:
 
-* `config` The value is a URI that will be loaded as an XML Calabash
+* `file` The value is a URI that will be loaded as an XML Calabash
   configuration file.
 * `stacktrace` The value will be interpreted as a boolean; if true, a
   stack trace will be printed if an error occurs.
@@ -150,9 +150,9 @@ the XML Calabash processor.
 
 When providing a content type, the following shortcuts are supported:
 
-* `xml` ➡ `application/xml`
-* `json` ➡ `application/json`
-* `text` ➡ `text/plain`
+* `xml` means `application/xml`
+* `json` means `application/json`
+* `text` means `text/plain`
 
 If you don’t specify one of those shortcuts, you must specify the
 entire media type.
