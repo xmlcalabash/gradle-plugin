@@ -1,0 +1,11 @@
+json/mapoutput.json
+json/output.json
+json/stringoutput.json
+saxon/output.xml
+simple/output.xml
+simple/stamped.xml
+xml/gradle/
+xml/gradlew
+xml/gradlew.bat
+xml/stringoutput.xml
+xml/xmloutput.xml
